@@ -32,22 +32,22 @@ export const CustomerSignUp = async (
     validationError: { target: true },
   });
 
-  if (validationError.length > 0) {
-    return res.status(400).json(validationError);
-  }
+  const validatioMessages = [];
+  validationError.forEach((err) =>
+    Object.values(err.constraints).forEach((msg) => validatioMessages.push(msg))
+  );
+
+  if (validatioMessages) return res.status(400).json(validatioMessages);
 
   const { email, phone, password } = customerInputs;
+  const existingCustomer = await Customer.findOne({ email: email });
+  if (existingCustomer)
+    return res.status(400).json({ message: "Email already exist!" });
 
   const salt = await GenerateSalt();
   const userPassword = await GeneratePassword(password, salt);
 
   const { otp, expiry } = GenerateOtp();
-
-  const existingCustomer = await Customer.find({ email: email });
-
-  if (existingCustomer !== null) {
-    return res.status(400).json({ message: "Email already exist!" });
-  }
 
   const result = await Customer.create({
     email: email,
@@ -75,6 +75,7 @@ export const CustomerSignUp = async (
       email: result.email,
       verified: result.verified,
     });
+
     // Send the result
     return res
       .status(201)
@@ -101,26 +102,28 @@ export const CustomerLogin = async (
 
   const { email, password } = customerInputs;
   const customer = await Customer.findOne({ email: email });
-  if (customer) {
-    const validation = await ValidatePassword(
-      password,
-      customer.password,
-      customer.salt
-    );
 
-    if (validation) {
-      const signature = GenerateSignature({
-        _id: customer._id,
-        email: customer.email,
-        verified: customer.verified,
-      });
+  if (!customer)
+    return res.status(400).json({ msg: "invalid Email or password" });
 
-      return res.status(200).json({
-        signature,
-        email: customer.email,
-        verified: customer.verified,
-      });
-    }
+  const validation = await ValidatePassword(
+    password,
+    customer.password,
+    customer.salt
+  );
+
+  if (validation) {
+    const signature = await GenerateSignature({
+      _id: customer._id,
+      email: customer.email,
+      verified: customer.verified,
+    });
+
+    return res.status(200).json({
+      signature,
+      email: customer.email,
+      verified: customer.verified,
+    });
   }
 
   return res.json({ msg: "Error With Signup" });
@@ -136,24 +139,27 @@ export const CustomerVerify = async (
 
   if (customer) {
     const profile = await Customer.findById(customer._id);
-    if (profile) {
-      if (profile.otp === parseInt(otp) && profile.otp_expiry >= new Date()) {
-        profile.verified = true;
 
-        const updatedCustomerResponse = await profile.save();
+    if (new Date() >= profile.otp_expiry)
+      return res.status(400).json({ msg: "token expired" });
 
-        const signature = GenerateSignature({
-          _id: updatedCustomerResponse._id,
-          email: updatedCustomerResponse.email,
-          verified: updatedCustomerResponse.verified,
-        });
+    if (profile && profile.otp === parseInt(otp)) {
+      profile.verified = true;
 
-        return res.status(200).json({
-          signature,
-          email: updatedCustomerResponse.email,
-          verified: updatedCustomerResponse.verified,
-        });
-      }
+      const updatedCustomerResponse = await profile.save();
+      const signature = GenerateSignature({
+        _id: updatedCustomerResponse._id,
+        email: updatedCustomerResponse.email,
+        verified: updatedCustomerResponse.verified,
+      });
+
+      return res.status(200).json({
+        signature,
+        email: updatedCustomerResponse.email,
+        verified: updatedCustomerResponse.verified,
+      });
+    } else {
+      return res.status(400).json({ msg: "Invalid token" });
     }
   }
 
@@ -260,6 +266,7 @@ const assignOrderForDelivery = async (orderId: string, vendorId: string) => {
       verified: true,
       isAvailable: true,
     });
+
     if (deliveryPerson) {
       // Check the nearest delivery person and assign the order
 

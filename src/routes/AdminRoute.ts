@@ -11,7 +11,7 @@ import {
 
 const router = express.Router();
 
-router.post("/vendor", CreateVandor);
+router.post("/create-vendor", CreateVandor);
 
 router.get("/vendors", GetVanndors);
 router.get("/vendor/:id", GetVandorByID);

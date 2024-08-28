@@ -30,17 +30,14 @@ export const CreateVandor = async (
 
   const existingVandor = await FindVendor("", email);
 
-  if (existingVandor !== null) {
-    return res.json({ message: "A vandor is exist with this email ID" });
-  }
+  if (existingVandor)
+    return res.json({ message: "A vandor already exist with this email" });
 
   //generate a salt
-
   const salt = await GenerateSalt();
   const userPassword = await GeneratePassword(password, salt);
 
   // encrypt the password using the salt
-
   const createdVandor = await Vendor.create({
     name: name,
     address: address,
