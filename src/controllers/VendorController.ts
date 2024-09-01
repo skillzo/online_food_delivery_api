@@ -11,6 +11,7 @@ import { Order } from "../models/Order";
 import { GenerateSignature, ValidatePassword } from "../utility";
 import { FindVendor } from "./AdminController";
 import { isArray } from "class-validator";
+import { error } from "winston";
 
 export const VendorLogin = async (
   req: Request,
@@ -40,19 +41,52 @@ export const VendorLogin = async (
   return res.json({ message: "Login credential is not valid" });
 };
 
+export const GetVendorById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const vendor = Vendor.findById(req.params.id);
+    return res.status(200).json(vendor);
+  } catch (err) {
+    return res.status(400).json(err);
+  }
+};
+
+export const GetAllVenders = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const page = Number(req.query.page) || 1;
+  const limit = Number(req.query.limit) || 10;
+  const name = req.query.name;
+  const skip = (page - 1) * limit;
+  const filter = name ? { name: { $regex: name, $options: "i" } } : {};
+
+  try {
+    const vendor = await Vendor.find(filter).skip(skip).limit(limit);
+    const total = await Vendor.countDocuments(filter);
+    return res
+      .status(200)
+      .json({ data: vendor, page, per_page: limit, totalCount: total });
+  } catch (err) {
+    return res.status(400).json(err);
+  }
+};
 export const GetVendorProfile = async (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
   const user = req.user;
-
-  if (user) {
+  try {
     const existingVendor = await FindVendor(user._id);
     return res.json(existingVendor);
+  } catch (err) {
+    return res.json({ message: "vendor Information Not Found", err: err });
   }
-
-  return res.json({ message: "vendor Information Not Found" });
 };
 
 export const UpdateVendorProfile = async (
@@ -61,23 +95,21 @@ export const UpdateVendorProfile = async (
   next: NextFunction
 ) => {
   const user = req.user;
-
   const { foodType, name, address, phone } = <EditVendorInput>req.body;
 
-  if (user) {
-    const existingVendor = await FindVendor(user._id);
+  try {
+    const res = await Vendor.findByIdAndUpdate(user._id, {
+      ...(req.body as EditVendorInput),
+    });
 
-    if (existingVendor !== null) {
-      existingVendor.name = name;
-      existingVendor.address;
-      existingVendor.phone = phone;
-      existingVendor.foodType = foodType;
-      const saveResult = await existingVendor.save();
-
-      return res.json(saveResult);
-    }
+    return res.status(200).json({
+      message: "Vendor profile updated successfully",
+    });
+  } catch (err) {
+    return res.json({
+      message: "Unable to Update vendor profile ",
+    });
   }
-  return res.json({ message: "Unable to Update vendor profile " });
 };
 
 export const UpdateVendorCoverImage = async (
@@ -168,8 +200,6 @@ export const AddFood = async (
 
     return res.status(200).json({ message: "Food Added Successfully" });
   }
-
-  return res.status(400).json({ message: "Could not add food!" });
 };
 
 export const GetFoods = async (
@@ -178,7 +208,6 @@ export const GetFoods = async (
   next: NextFunction
 ) => {
   const user = req.user;
-
   const page = parseInt(req.query.page as string) || 1;
   const limit = parseInt(req.query.page_size as string) || 10;
   const skip = (page - 1) * limit;
@@ -210,6 +239,20 @@ export const GetFoods = async (
     });
   }
   return res.json({ message: "Foods not found!" });
+};
+
+export const GetFoodById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const foodId = req.params.id;
+  try {
+    const food = await Food.findById(foodId);
+    return res.status(200).json(food);
+  } catch (err) {
+    return res.status(404).json({ message: "Food Not Found", error: err });
+  }
 };
 
 export const GetCurrentOrders = async (
