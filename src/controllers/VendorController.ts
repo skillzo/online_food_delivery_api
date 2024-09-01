@@ -95,10 +95,8 @@ export const UpdateVendorProfile = async (
   next: NextFunction
 ) => {
   const user = req.user;
-  const { foodType, name, address, phone } = <EditVendorInput>req.body;
-
   try {
-    const res = await Vendor.findByIdAndUpdate(user._id, {
+    await Vendor.findByIdAndUpdate(user._id, {
       ...(req.body as EditVendorInput),
     });
 
@@ -106,7 +104,7 @@ export const UpdateVendorProfile = async (
       message: "Vendor profile updated successfully",
     });
   } catch (err) {
-    return res.json({
+    return res.status(400).json({
       message: "Unable to Update vendor profile ",
     });
   }
